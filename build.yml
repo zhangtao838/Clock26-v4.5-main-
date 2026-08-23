@@ -1,0 +1,85 @@
+name: Build McClock26
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scheme: rootless
+            artifact: McClock26-rootless
+          - scheme: roothide
+            artifact: McClock26-roothide
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Normalize line endings (strip CR)
+        run: |
+          # Theos/dpkg rejects a control file with CRLF. Strip CR from every
+          # text build file on disk right before building — bulletproof no
+          # matter how the file was committed or what git autocrlf did.
+          find . -type f \( \
+            -name control -o -name 'Makefile' -o -name '*.mk' \
+            -o -name '*.plist' -o -name '*.xm' -o -name '*.x' \
+            -o -name '*.m' -o -name '*.mm' -o -name '*.h' \
+            -o -name '*.md' -o -name '*.yml' -o -name '*.yaml' \
+          \) -print0 | xargs -0 perl -pi -e 's/\r//g'
+
+      - name: Install dependencies
+        run: brew install dpkg ldid xz || true
+
+      - name: Install roothide Theos
+        run: |
+          git clone --recursive https://github.com/roothide/theos.git $HOME/theos
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+          echo "$HOME/theos/bin" >> $GITHUB_PATH
+
+      - name: Fix fakeroot on Apple Silicon
+        run: |
+          sed -i '' 's/$(FAKEROOT) -c/true/' $THEOS/makefiles/stage.mk
+          sed -i '' 's/$(FAKEROOT) -r //' $THEOS/makefiles/package/deb.mk
+
+      - name: Install iPhoneOS 26.5 SDK (with private frameworks)
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/xybp888/iOS-SDKs.git /tmp/ios-sdks
+          cd /tmp/ios-sdks
+          git sparse-checkout set iPhoneOS26.5.sdk
+          mkdir -p $HOME/theos/sdks
+          cp -r iPhoneOS26.5.sdk $HOME/theos/sdks/
+
+      - name: Build (${{ matrix.scheme }})
+        run: |
+          make clean
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=${{ matrix.scheme }} DISABLE_ROOTLESS_COMPAT_WARNING=1
+
+      - name: Rename deb
+        run: |
+          cd packages
+          for f in *.deb; do
+            mv "$f" "$(basename "$f" .deb)_${{ matrix.scheme }}.deb"
+          done
+
+      - name: Inspect deb (${{ matrix.scheme }})
+        run: |
+          cd packages
+          for f in *.deb; do
+            echo "======================================================"
+            echo ">>> $f"
+            echo "------ control ------"
+            dpkg-deb --info "$f"
+            echo "------ contents ------"
+            dpkg-deb --contents "$f"
+          done
+
+      - name: Upload deb (${{ matrix.scheme }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: packages/*.deb

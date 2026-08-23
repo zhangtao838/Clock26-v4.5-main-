@@ -1,0 +1,10 @@
+Package: com.mcclock26.locktime
+Name: McClock26
+Version: 4.5
+Architecture: iphoneos-arm64e
+Description: 一个仿 IOS26 时钟的插件
+Maintainer: Mc
+Author: Mc
+Section: Tweaks
+Depends: mobilesubstrate, preferenceloader
+Tag: purpose::lockscreen, compatible_min_ios::15.0
