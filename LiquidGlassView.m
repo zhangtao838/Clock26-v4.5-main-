@@ -132,11 +132,11 @@ static NSString *const kLiquidGlassShader = @
 
 - (void)commonInit {
     // 默认参数
-    _blurRadius = 20.0f;
-    _glassThickness = 12.0f;
-    _refractionScale = 1.0f;
-    _specularOpacity = 0.6f;
-    _dispersion = 0.5f;
+    _blurRadius = 30.0f;
+    _glassThickness = 20.0f;
+    _refractionScale = 1.5f;
+    _specularOpacity = 0.8f;
+    _dispersion = 0.8f;
 
     self.opaque = NO;
     self.backgroundColor = [UIColor clearColor];
@@ -150,6 +150,7 @@ static NSString *const kLiquidGlassShader = @
     _metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
     _metalLayer.framebufferOnly = NO;
     _metalLayer.opaque = NO;
+    _metalLayer.contentsScale = [UIScreen mainScreen].nativeScale;
 
     _commandQueue = [_device newCommandQueue];
 
@@ -209,18 +210,22 @@ static NSString *const kLiquidGlassShader = @
 #pragma mark - 截取背景
 - (void)captureBackground {
     if (self.bounds.size.width < 1 || self.bounds.size.height < 1) return;
-    UIView *superview = self.superview;
-    if (!superview) return;
+    // 截取整个窗口（含壁纸），而不是只截 superview（superview 是透明的）
+    UIView *window = self.window;
+    if (!window) window = self.superview;
+    if (!window) return;
 
-    CGRect captureRect = [self convertRect:self.bounds toView:superview];
+    CGRect captureRect = [self convertRect:self.bounds toView:window];
     CGFloat scale = [UIScreen mainScreen].nativeScale;
     CGSize texSize = CGSizeMake(self.bounds.size.width * scale,
                                  self.bounds.size.height * scale);
     if (texSize.width < 1 || texSize.height < 1) return;
 
-    // 隐藏自己，避免递归截图
+    // 隐藏自己和 maskView（数字 label），避免截到自己
     BOOL wasHidden = self.hidden;
+    BOOL maskWasHidden = _maskView.hidden;
     self.hidden = YES;
+    _maskView.hidden = YES;
 
     UIGraphicsImageRendererFormat *fmt = [UIGraphicsImageRendererFormat preferredFormat];
     fmt.scale = scale;
@@ -231,10 +236,11 @@ static NSString *const kLiquidGlassShader = @
     UIImage *img = [renderer imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
         CGContextTranslateCTM(ctx.CGContext, -captureRect.origin.x * scale,
                               -captureRect.origin.y * scale);
-        [superview drawViewHierarchyInRect:superview.bounds afterScreenUpdates:NO];
+        [window drawViewHierarchyInRect:window.bounds afterScreenUpdates:NO];
     }];
 
     self.hidden = wasHidden;
+    _maskView.hidden = maskWasHidden;
 
     if (!img) return;
     _bgTexture = [self textureFromImage:img size:texSize];
