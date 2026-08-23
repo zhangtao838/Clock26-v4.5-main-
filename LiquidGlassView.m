@@ -163,8 +163,8 @@ static NSString *const kLiquidGlassShader = @
                                                    error:&err];
     if (!lib) { NSLog(@"[LiquidGlass] shader compile failed: %@", err); return; }
 
-    id<MTLFunction> vert = [lib newFunctionWithName:@"vertexShader"];
-    id<MTLFunction] frag = [lib newFunctionWithName:@"fragmentShader"];
+    id vert = [lib newFunctionWithName:@"vertexShader"];
+    id frag = [lib newFunctionWithName:@"fragmentShader"];
     if (!vert || !frag) return;
 
     MTLRenderPipelineDescriptor *desc = [MTLRenderPipelineDescriptor new];
